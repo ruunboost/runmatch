@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RunMatch — Trouve ta chaussure idéale</title>
+
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+
+  nav { background: white; border-bottom: 1px solid #e8e8e5; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 10; }
+  .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo span { color: #185FA5; }
+
+  .hero { background: white; border-bottom: 1px solid #e8e8e5; padding: 3rem 2rem 2.5rem; text-align: center; }
+  .hero h1 { font-size: 36px; font-weight: 700; letter-spacing: -1px; margin-bottom: 12px; }
+  .hero h1 span { color: #185FA5; }
+  .hero p { font-size: 17px; color: #666; max-width: 480px; margin: 0 auto; }
+
+  .container { max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; }
+
+  .form-card { background: white; border-radius: 16px; border: 1px solid #e8e8e5; overflow: hidden; margin-bottom: 2rem; }
+  .form-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid #e8e8e5; display: flex; align-items: center; gap: 10px; }
+  .form-header h2 { font-size: 16px; font-weight: 600; }
+  .step-badge { background: #185FA5; color: white; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+  .form-section { padding: 1.25rem 1.5rem; border-bottom: 1px solid #f0f0ec; }
+  .form-section:last-of-type { border-bottom: none; }
+  .section-label { font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+
+  .opt-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .opt-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .opt-btn { padding: 14px; border-radius: 12px; border: 1.5px solid #e8e8e5; background: #fafaf8; cursor: pointer; text-align: left; transition: all 0.15s; width: 100%; }
+  .opt-btn:hover { border-color: #185FA5; background: #f0f6fd; }
+  .opt-btn.selected { border-color: #185FA5; background: #e8f2fd; }
+  .opt-btn .icon { font-size: 22px; margin-bottom: 6px; display: block; }
+  .opt-btn .label { font-size: 14px; font-weight: 600; display: block; color: #1a1a1a; }
+  .opt-btn .sublabel { font-size: 12px; color: #888; display: block; margin-top: 2px; }
+  .opt-btn.selected .label { color: #185FA5; }
+
+  .slider-wrap { margin-top: 4px; }
+  .slider-top { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .slider-top span { font-size: 14px; color: #666; }
+  .slider-top strong { font-size: 18px; font-weight: 700; color: #185FA5; }
+  input[type=range] { width: 100%; height: 6px; -webkit-appearance: none; background: #e8e8e5; border-radius: 3px; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #185FA5; cursor: pointer; border: 3px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+  .slider-labels { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-top: 6px; }
+
+  .cta-wrap { padding: 1.5rem; }
+  .cta-btn { width: 100%; padding: 16px; border-radius: 12px; background: #185FA5; color: white; border: none; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+  .cta-btn:hover { background: #0c447c; }
+  .cta-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+  /* Loading state */
+  .loading { display: none; text-align: center; padding: 3rem; }
+  .loading.visible { display: block; }
+  .spinner { width: 36px; height: 36px; border: 3px solid #e8e8e5; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 1rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results */
+  #results { display: none; }
+  .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .results-header h2 { font-size: 22px; font-weight: 700; }
+  .results-header button { background: transparent; border: 1px solid #e8e8e5; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; color: #666; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; background: #e8f2fd; color: #185FA5; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; margin-right: 6px; margin-bottom: 10px; }
+
+  .shoe-card { background: white; border-radius: 16px; border: 1px solid #e8e8e5; padding: 1.25rem 1.5rem; margin-bottom: 14px; transition: box-shadow 0.15s; }
+  .shoe-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+  .shoe-card.top-pick { border: 2px solid #185FA5; }
+  .shoe-main { display: flex; gap: 16px; align-items: flex-start; }
+  .shoe-icon-wrap { width: 64px; height: 64px; background: #f0f6fd; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; }
+  .shoe-body { flex: 1; }
+  .shoe-top-row { display: flex; align-items: center; gap: 10px; margin-bottom: 3px; flex-wrap: wrap; }
+  .shoe-name { font-size: 16px; font-weight: 700; }
+  .shoe-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+  .shoe-badge.best { background: #185FA5; color: white; }
+  .shoe-badge.rank { background: #f0f0ec; color: #666; }
+  .shoe-brand { font-size: 13px; color: #888; margin-bottom: 10px; }
+  .shoe-specs { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .spec-item { font-size: 13px; color: #666; }
+  .spec-item b { color: #1a1a1a; font-weight: 600; }
+  .match-row { margin-bottom: 12px; }
+  .match-top { display: flex; justify-content: space-between; font-size: 13px; color: #888; margin-bottom: 5px; }
+  .match-top strong { color: #185FA5; }
+  .match-track { height: 6px; background: #f0f0ec; border-radius: 3px; overflow: hidden; }
+  .match-fill { height: 100%; background: #185FA5; border-radius: 3px; transition: width 0.8s ease; }
+
+  /* Prix section */
+  .prices-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0ec; }
+  .prices-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .price-list { display: flex; gap: 8px; flex-wrap: wrap; }
+  .price-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #f5f5f3; border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 160px; }
+  .price-shop { font-size: 13px; color: #444; font-weight: 500; }
+  .price-amount { font-size: 16px; font-weight: 700; color: #185FA5; }
+  .price-link { font-size: 12px; color: #185FA5; text-decoration: none; }
+  .price-link:hover { text-decoration: underline; }
+  .best-price { background: #e8f2fd; }
+
+  .empty { background: white; border-radius: 16px; border: 1px solid #e8e8e5; padding: 3rem; text-align: center; color: #888; }
+  .empty h3 { font-size: 18px; color: #444; margin-bottom: 8px; }
+
+  /* Error banner */
+  .error-banner { background: #fff3f3; border: 1px solid #ffcccc; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 14px; color: #cc0000; display: none; }
+  .error-banner.visible { display: block; }
+
+  @media (max-width: 600px) {
+    .opt-grid-3 { grid-template-columns: 1fr 1fr; }
+    .hero h1 { font-size: 26px; }
+    .shoe-main { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Run<span>Match</span></div>
+</nav>
+
+<div class="hero">
+  <h1>Trouve ta chaussure <span>idéale</span></h1>
+  <p>Notre algorithme analyse ton profil et te recommande les meilleures chaussures parmi notre base de données.</p>
+</div>
+
+<div class="container">
+
+  <div class="error-banner" id="error-banner">
+    Impossible de se connecter à la base de données. Vérifie ta configuration Supabase.
+  </div>
+
+  <div class="form-card" id="form-section">
+    <div class="form-header">
+      <span class="step-badge">4 questions</span>
+      <h2>Ton profil de coureur</h2>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">Surface de course</div>
+      <div class="opt-grid-2">
+        <button class="opt-btn" onclick="choose(this,'surface','route')">
+          <span class="icon">🏙️</span>
+          <span class="label">Route / asphalte</span>
+          <span class="sublabel">Trottoir, piste, bitume</span>
+        </button>
+        <button class="opt-btn" onclick="choose(this,'surface','trail')">
+          <span class="icon">⛰️</span>
+          <span class="label">Trail / montagne</span>
+          <span class="sublabel">Sentier, boue, pierres</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">Niveau et objectif</div>
+      <div class="opt-grid-3">
+        <button class="opt-btn" onclick="choose(this,'niveau','debutant')">
+          <span class="icon">🌱</span>
+          <span class="label">Débutant</span>
+          <span class="sublabel">Je commence à courir</span>
+        </button>
+        <button class="opt-btn" onclick="choose(this,'niveau','intermediaire')">
+          <span class="icon">🏃</span>
+          <span class="label">Intermédiaire</span>
+          <span class="sublabel">2-3 sorties par semaine</span>
+        </button>
+        <button class="opt-btn" onclick="choose(this,'niveau','expert')">
+          <span class="icon">⚡</span>
+          <span class="label">Expert</span>
+          <span class="sublabel">Compétition & perf</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">Type de foulée</div>
+      <div class="opt-grid-3">
+        <button class="opt-btn" onclick="choose(this,'foulee','pronateur')">
+          <span class="icon">↙️</span>
+          <span class="label">Pronateur</span>
+          <span class="sublabel">Pied vers l'intérieur</span>
+        </button>
+        <button class="opt-btn" onclick="choose(this,'foulee','neutre')">
+          <span class="icon">⬇️</span>
+          <span class="label">Neutre</span>
+          <span class="sublabel">Foulée équilibrée</span>
+        </button>
+        <button class="opt-btn" onclick="choose(this,'foulee','supinateur')">
+          <span class="icon">↘️</span>
+          <span class="label">Supinateur</span>
+          <span class="sublabel">Pied vers l'extérieur</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label">Budget maximum</div>
+      <div class="slider-wrap">
+        <div class="slider-top">
+          <span>Budget</span>
+          <strong id="budget-display">150 €</strong>
+        </div>
+        <input type="range" min="60" max="300" value="150" step="10" id="budget-input" oninput="updateBudget(this.value)">
+        <div class="slider-labels"><span>60 €</span><span>180 €</span><span>300 €</span></div>
+      </div>
+    </div>
+
+    <div class="cta-wrap">
+      <button class="cta-btn" id="search-btn" onclick="searchShoes()">Voir mes recommandations →</button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p style="color:#666;font-size:15px">Recherche des meilleures chaussures pour toi...</p>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="results-header">
+      <h2>Tes recommandations</h2>
+      <button onclick="goBack()">← Modifier mes critères</button>
+    </div>
+    <div class="filter-bar" id="active-tags" style="margin-bottom:1.25rem"></div>
+    <div id="cards"></div>
+  </div>
+
+</div>
+
+<script>
+  // ============================================================
+  // CONFIGURATION SUPABASE
+  // Remplace ces deux valeurs par celles de ton projet Supabase
+  // (Settings → API dans ton tableau de bord Supabase)
+  // ============================================================
+  const SUPABASE_URL = 'COLLE_TA_PROJECT_URL_ICI';
+  const SUPABASE_KEY = 'COLLE_TA_ANON_KEY_ICI';
+  // ============================================================
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  var state = { surface: null, niveau: null, foulee: null, budget: 150 };
+
+  function choose(btn, key, val) {
+    document.querySelectorAll('.opt-btn').forEach(function(b) {
+      if (b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("'" + key + "'") > -1) {
+        b.classList.remove('selected');
+      }
+    });
+    btn.classList.add('selected');
+    state[key] = val;
+  }
+
+  function updateBudget(v) {
+    state.budget = parseInt(v);
+    document.getElementById('budget-display').textContent = v + ' €';
+  }
+
+  async function searchShoes() {
+    if (!state.surface || !state.niveau || !state.foulee) {
+      alert('Merci de répondre à toutes les questions avant de continuer !');
+      return;
+    }
+
+    // Vérifier que les clés sont configurées
+    if (SUPABASE_URL === 'COLLE_TA_PROJECT_URL_ICI') {
+      document.getElementById('error-banner').classList.add('visible');
+      document.getElementById('error-banner').textContent =
+        'Configuration manquante : ouvre le fichier HTML et remplace COLLE_TA_PROJECT_URL_ICI et COLLE_TA_ANON_KEY_ICI par tes vraies clés Supabase.';
+      return;
+    }
+
+    document.getElementById('form-section').style.display = 'none';
+    document.getElementById('loading').classList.add('visible');
+
+    try {
+      // 1. Récupérer les chaussures filtrées
+      const { data: shoes, error: shoesError } = await supabase
+        .from('shoes')
+        .select('*')
+        .eq('surface', state.surface)
+        .contains('niveau', [state.niveau])
+        .contains('foulee', [state.foulee]);
+
+      if (shoesError) throw shoesError;
+
+      // 2. Filtrer par budget (via les prix)
+      const shoeIds = shoes.map(s => s.id);
+
+      const { data: prices, error: pricesError } = await supabase
+        .from('prices')
+        .select('*')
+        .in('shoe_id', shoeIds)
+        .lte('prix', state.budget);
+
+      if (pricesError) throw pricesError;
+
+      // 3. Récupérer les scores
+      const { data: scores, error: scoresError } = await supabase
+        .from('scores')
+        .select('*')
+        .in('shoe_id', shoeIds)
+        .eq('niveau', state.niveau);
+
+      if (scoresError) throw scoresError;
+
+      // 4. Assembler les données
+      const shoesWithBudget = shoes.filter(shoe =>
+        prices.some(p => p.shoe_id === shoe.id)
+      );
+
+      const shoesWithScores = shoesWithBudget.map(shoe => {
+        const score = scores.find(s => s.shoe_id === shoe.id);
+        const shoePrices = prices
+          .filter(p => p.shoe_id === shoe.id)
+          .sort((a, b) => a.prix - b.prix);
+        return {
+          ...shoe,
+          match: score ? score.score : 70,
+          prices: shoePrices
+        };
+      }).sort((a, b) => b.match - a.match).slice(0, 3);
+
+      renderResults(shoesWithScores);
+
+    } catch (err) {
+      console.error(err);
+      document.getElementById('loading').classList.remove('visible');
+      document.getElementById('form-section').style.display = 'block';
+      document.getElementById('error-banner').textContent = 'Erreur : ' + err.message;
+      document.getElementById('error-banner').classList.add('visible');
+    }
+  }
+
+  function renderResults(shoes) {
+    document.getElementById('loading').classList.remove('visible');
+
+    var niveauLabel = { debutant: 'Débutant', intermediaire: 'Intermédiaire', expert: 'Expert' };
+    var surfaceLabel = { route: 'Route', trail: 'Trail' };
+    var fouleeLabel = { pronateur: 'Pronateur', neutre: 'Neutre', supinateur: 'Supinateur' };
+
+    document.getElementById('active-tags').innerHTML =
+      '<span class="tag">' + surfaceLabel[state.surface] + '</span>' +
+      '<span class="tag">' + niveauLabel[state.niveau] + '</span>' +
+      '<span class="tag">Foulée ' + fouleeLabel[state.foulee] + '</span>' +
+      '<span class="tag">Budget ' + state.budget + ' €</span>';
+
+    var cc = document.getElementById('cards');
+    if (shoes.length === 0) {
+      cc.innerHTML = '<div class="empty"><h3>Aucun résultat</h3><p>Essaie d\'augmenter ton budget ou de modifier ta foulée.</p></div>';
+    } else {
+      cc.innerHTML = shoes.map(function(shoe, i) {
+        var pricesHtml = '';
+        if (shoe.prices && shoe.prices.length > 0) {
+          pricesHtml = '<div class="prices-section">' +
+            '<div class="prices-title">Prix chez les revendeurs</div>' +
+            '<div class="price-list">' +
+            shoe.prices.map(function(p, pi) {
+              return '<div class="price-item ' + (pi === 0 ? 'best-price' : '') + '">' +
+                '<span class="price-shop">' + p.revendeur + '</span>' +
+                '<div style="display:flex;align-items:center;gap:10px">' +
+                  '<span class="price-amount">' + parseFloat(p.prix).toFixed(2).replace('.', ',') + ' €</span>' +
+                  (p.url_affiliation ? '<a class="price-link" href="' + p.url_affiliation + '" target="_blank">Voir →</a>' : '') +
+                '</div>' +
+              '</div>';
+            }).join('') +
+            '</div></div>';
+        }
+
+        return '<div class="shoe-card ' + (i === 0 ? 'top-pick' : '') + '">' +
+          '<div class="shoe-main">' +
+            '<div class="shoe-icon-wrap">' + (shoe.surface === 'trail' ? '⛰️' : '🏙️') + '</div>' +
+            '<div class="shoe-body">' +
+              '<div class="shoe-top-row">' +
+                '<span class="shoe-name">' + shoe.name + '</span>' +
+                (i === 0 ? '<span class="shoe-badge best">⭐ Meilleur match</span>' : '<span class="shoe-badge rank">#' + (i+1) + '</span>') +
+              '</div>' +
+              '<div class="shoe-brand">' + shoe.brand + (shoe.description ? ' — ' + shoe.description : '') + '</div>' +
+              '<div class="shoe-specs">' +
+                '<span class="spec-item"><b>' + shoe.drop_mm + ' mm</b> drop</span>' +
+                '<span class="spec-item"><b>' + shoe.poids_g + ' g</b></span>' +
+                '<span class="spec-item"><b>' + shoe.amorti + '</b> amorti</span>' +
+              '</div>' +
+              '<div class="match-row">' +
+                '<div class="match-top"><span>Compatibilité</span><strong>' + shoe.match + '%</strong></div>' +
+                '<div class="match-track"><div class="match-fill" style="width:' + shoe.match + '%"></div></div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          pricesHtml +
+        '</div>';
+      }).join('');
+    }
+
+    document.getElementById('results').style.display = 'block';
+    window.scrollTo(0, 0);
+  }
+
+  function goBack() {
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('form-section').style.display = 'block';
+    document.getElementById('error-banner').classList.remove('visible');
+    window.scrollTo(0, 0);
+  }
+</script>
+
+</body>
+</html>
